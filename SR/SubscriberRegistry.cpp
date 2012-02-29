@@ -187,7 +187,7 @@ SubscriberRegistry::~SubscriberRegistry()
 
 
 
-SubscriberRegistry::Status SubscriberRegistry::sqlLocal(const char* query, char **resultptr)
+SubscriberRegistry::Status SubscriberRegistry::sqlLocal(const char *query, char **resultptr)
 {
 	LOG(INFO) << query;
 
@@ -219,48 +219,36 @@ SubscriberRegistry::Status SubscriberRegistry::sqlLocal(const char* query, char 
 
 
 
-string SubscriberRegistry::sqlQuery(string unknownColumn, string table, string knownColumn, string knownValue)
+char *SubscriberRegistry::sqlQuery(const char *unknownColumn, const char *table, const char *knownColumn, const char *knownValue)
 {
 	char *result = NULL;
 	SubscriberRegistry::Status st;
 	ostringstream os;
 	os << "select " << unknownColumn << " from " << table << " where " << knownColumn << " = \"" << knownValue << "\"";
 	st = sqlLocal(os.str().c_str(), &result);
-	if ((st == SUCCESS) && result) {
+	if (st == SUCCESS) {
 		LOG(INFO) << "result = " << result;
 		return result;
 	} else {
-		return "";
+		return NULL;
 	}
 }
 
 
 
-SubscriberRegistry::Status SubscriberRegistry::sqlUpdate(string stmt)
+SubscriberRegistry::Status SubscriberRegistry::sqlUpdate(const char *stmt)
 {
 	LOG(INFO) << stmt;
-	return sqlLocal(stmt.c_str(), NULL);
+	return sqlLocal(stmt, NULL);
 }
 
-string SubscriberRegistry::imsiGet(string imsi, string key)
-{
-	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
-	return sqlQuery(key, "sip_buddies", "name", imsi);
-}
 
-SubscriberRegistry::Status SubscriberRegistry::imsiSet(string imsi, string key, string value)
-{
-	string name = imsi.substr(0,4) == "IMSI" ? imsi : "IMSI" + imsi;
-	ostringstream os;
-	os << "update sip_buddies set " << key << " = \"" << value << "\" where name = \"" << name << "\"";
-	return sqlUpdate(os.str());
-}
 
-string SubscriberRegistry::getIMSI(string ISDN)
+char *SubscriberRegistry::getIMSI(const char *ISDN)
 {
-	if (ISDN.empty()) {
+	if (!ISDN) {
 		LOG(WARNING) << "SubscriberRegistry::getIMSI attempting lookup of NULL ISDN";
-		return "";
+		return NULL;
 	}
 	LOG(INFO) << "getIMSI(" << ISDN << ")";
 	return sqlQuery("dial", "dialdata_table", "exten", ISDN);
@@ -268,23 +256,38 @@ string SubscriberRegistry::getIMSI(string ISDN)
 
 
 
-string SubscriberRegistry::getCLIDLocal(string IMSI)
+char *SubscriberRegistry::getCLIDLocal(const char* IMSI)
 {
-	if (IMSI.empty()) {
+	if (!IMSI) {
 		LOG(WARNING) << "SubscriberRegistry::getCLIDLocal attempting lookup of NULL IMSI";
-		return "";
+		return NULL;
 	}
 	LOG(INFO) << "getCLIDLocal(" << IMSI << ")";
 	return sqlQuery("callerid", "sip_buddies", "name", IMSI);
 }
 
-
-
-string SubscriberRegistry::getCLIDGlobal(string IMSI)
+char *SubscriberRegistry::getKI(const char* IMSI)
 {
-	if (IMSI.empty()) {
+	LOG(WARNING) << "TEST: in getKI()";
+	if (!IMSI) {
+		LOG(WARNING) << "SubscriberRegistry::getKI attempting lookup of NULL IMSI";
+		return NULL;
+	}
+	char fullIMSI[19];
+	strcpy(fullIMSI, "IMSI");
+	strcat(fullIMSI, IMSI);
+	LOG(WARNING) << "getKI(" << fullIMSI << ")" << sqlQuery("ki", "sip_buddies", "name", fullIMSI);
+
+	return sqlQuery("ki", "sip_buddies", "name", fullIMSI);
+}
+
+
+
+char *SubscriberRegistry::getCLIDGlobal(const char* IMSI)
+{
+	if (!IMSI) {
 		LOG(WARNING) << "SubscriberRegistry::getCLIDGlobal attempting lookup of NULL IMSI";
-		return "";
+		return NULL;
 	}
 	LOG(INFO) << "getCLIDGlobal(" << IMSI << ")";
 	return sqlQuery("callerid", "sip_buddies", "name", IMSI);
@@ -292,11 +295,11 @@ string SubscriberRegistry::getCLIDGlobal(string IMSI)
 
 
 
-string SubscriberRegistry::getRegistrationIP(string IMSI)
+char *SubscriberRegistry::getRegistrationIP(const char* IMSI)
 {
-	if (IMSI.empty()) {
+	if (!IMSI) {
 		LOG(WARNING) << "SubscriberRegistry::getRegistrationIP attempting lookup of NULL IMSI";
-		return "";
+		return NULL;
 	}
 	LOG(INFO) << "getRegistrationIP(" << IMSI << ")";
 	return sqlQuery("ipaddr", "sip_buddies", "name", IMSI);
@@ -304,33 +307,40 @@ string SubscriberRegistry::getRegistrationIP(string IMSI)
 
 
 
-SubscriberRegistry::Status SubscriberRegistry::setRegTime(string IMSI)
+SubscriberRegistry::Status SubscriberRegistry::setRegTime(const char* IMSI)
 {
-	if (IMSI.empty()) {
+	if (!IMSI) {
 		LOG(WARNING) << "SubscriberRegistry::setRegTime attempting set for NULL IMSI";
 		return FAILURE;
 	}
 	unsigned now = (unsigned)time(NULL);
 	ostringstream os;
 	os << "update sip_buddies set regTime = " << now  << " where name = " << '"' << IMSI << '"';
-	return sqlUpdate(os.str());
+	return sqlUpdate(os.str().c_str());
 }
 
 
 
-SubscriberRegistry::Status SubscriberRegistry::addUser(string IMSI, string CLID)
+SubscriberRegistry::Status SubscriberRegistry::addUser(const char* IMSI, const char* CLID)
 {
-	if (IMSI.empty()) {
+	if (!IMSI) {
 		LOG(WARNING) << "SubscriberRegistry::addUser attempting add of NULL IMSI";
 		return FAILURE;
 	}
-	if (CLID.empty()) {
+	if (!CLID) {
 		LOG(WARNING) << "SubscriberRegistry::addUser attempting add of NULL CLID";
 		return FAILURE;
 	}
-	if (!getIMSI(CLID).empty() || !getCLIDLocal(IMSI).empty()) {
+	//this was a memory leak -kurtis
+	char* old_imsi = getIMSI(CLID);
+	char* old_clid = getCLIDLocal(IMSI);
+	if (old_imsi || old_clid) {
 		LOG(WARNING) << "SubscriberRegistry::addUser attempting user duplication";
-		//technically failure, but let's move on
+		// technically this is a failure, but I don't want it to keep trying
+		if (old_imsi)
+			free(old_imsi);
+		if (old_clid)
+			free(old_clid);
 		return SUCCESS;
 	}
 	LOG(INFO) << "addUser(" << IMSI << "," << CLID << ")";
@@ -357,49 +367,40 @@ SubscriberRegistry::Status SubscriberRegistry::addUser(string IMSI, string CLID)
 	os << "\"" << "127.0.0.1" << "\"";
 	os << ")";
 	os << ";";
-	SubscriberRegistry::Status st = sqlUpdate(os.str());
+	SubscriberRegistry::Status st = sqlUpdate(os.str().c_str());
 	ostringstream os2;
 	os2 << "insert into dialdata_table (exten, dial) values (";
 	os2 << "\"" << CLID << "\"";
 	os2 << ",";
 	os2 << "\"" << IMSI << "\"";
 	os2 << ")";
-	SubscriberRegistry::Status st2 = sqlUpdate(os2.str());
+	SubscriberRegistry::Status st2 = sqlUpdate(os2.str().c_str());
 	return st == SUCCESS && st2 == SUCCESS ? SUCCESS : FAILURE;
 }
 
 
 
-string SubscriberRegistry::mapCLIDGlobal(string local)
+char *SubscriberRegistry::mapCLIDGlobal(const char *local)
 {
-	if (local.empty()) {
+	if (!local) {
 		LOG(WARNING) << "SubscriberRegistry::mapCLIDGlobal attempting lookup of NULL local";
-		return "";
+		return NULL;
 	}
 	LOG(INFO) << "mapCLIDGlobal(" << local << ")";
-	string IMSI = getIMSI(local);
-	if (IMSI.empty()) return "";
-	return getCLIDGlobal(IMSI);
+	char *IMSI = getIMSI(local);
+	if (!IMSI) return NULL;
+	char *global = getCLIDGlobal(IMSI);
+	free(IMSI);
+	return global;
 }
 
-SubscriberRegistry::Status SubscriberRegistry::RRLPUpdate(string name, string lat, string lon, string err){
-	ostringstream os;
-	os << "insert into RRLP (name, latitude, longitude, error, time) values (" <<
-	  '"' << name << '"' << "," <<
-	  lat << "," <<
-	  lon << "," <<
-	  err << "," <<
-	  "datetime('now')"
-	  ")";
-	LOG(INFO) << os.str();
-	return sqlUpdate(os.str());
-}
 
-bool SubscriberRegistry::useGateway(string ISDN)
+
+bool SubscriberRegistry::useGateway(const char* ISDN)
 {
 	// FIXME -- Do something more general in Asterisk.
 	// This is a hack for Burning Man.
-	int cmp = strncmp(ISDN.c_str(),"88351000125",11);
+	int cmp = strncmp(ISDN,"88351000125",11);
 	return cmp!=0;
 }
 

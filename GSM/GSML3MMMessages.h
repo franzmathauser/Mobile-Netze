@@ -431,7 +431,7 @@ class L3AuthenticationRequest : public L3MMMessage {
 /** GSM 04.08 9.2.3 */
 class L3AuthenticationResponse : public L3MMMessage {
 
-	private:
+	public:
 
 	L3SRES mSRES;
 
@@ -444,6 +444,7 @@ class L3AuthenticationResponse : public L3MMMessage {
 	size_t l2BodyLength() const { return mSRES.lengthV(); }
 	void parseBody(const L3Frame&, size_t &rp);
 	void text(std::ostream&) const;
+
 };
 
 

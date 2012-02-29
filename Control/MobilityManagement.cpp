@@ -185,6 +185,36 @@ void Control::LocationUpdatingController(const L3LocationUpdatingRequest* lur, L
 		return;
 	}
 
+// GSM::L3CipheringKeySequenceNumber cipherKey = GSM::L3CipheringKeySequenceNumber(42);
+
+	// L3RAND(1,10), values:
+	// 2103: 0xc102e72b
+	// 2100: 0x112233, ki: 100010010001000110011 (dezimal: 1122867)
+
+	srand(time(NULL));
+	uint64_t zufall = rand();
+	int ki = 1122867;
+
+	LOG(INFO) << "TEST: vor atoi()";
+	ki = atoi(gSubscriberRegistry.getKI(IMSI));
+	LOG(INFO) << "TEST: nach atoi(), Ki: " << ki;
+
+	int l_sres = ki ^ zufall;
+
+	GSM::L3RAND rand = GSM::L3RAND(zufall<<=32,0);
+
+	DCCH->send(GSM::L3AuthenticationRequest(0,rand));
+	GSM::L3AuthenticationResponse* msg = (GSM::L3AuthenticationResponse*) getMessage(DCCH);
+	LOG(INFO) << "TEST: Ist: " << msg->mSRES << ", Soll: 0x" << hex << l_sres << ", RAND: " << zufall;
+
+	if (msg->mSRES.value() != l_sres){
+		DCCH->send(L3AuthenticationReject());
+		DCCH->send(L3ChannelRelease());
+		LOG(INFO) << "TEST: Sucker!!!!";
+		return;
+	}
+
+
 	// This allows us to configure Open Registration
 	bool openRegistration = gConfig.defines("Control.LUR.OpenRegistration");
 
@@ -201,25 +231,26 @@ void Control::LocationUpdatingController(const L3LocationUpdatingRequest* lur, L
 			throw UnexpectedMessage();
 		}
 		LOG(INFO) << *resp;
-		string new_imei = resp->mobileID().digits();
-		if (!gTMSITable.IMEI(IMSI,new_imei.c_str())){
+		const char* new_imei = resp->mobileID().digits();
+		if (!gTMSITable.IMEI(IMSI,new_imei)){
 			LOG(WARNING) << "failed access to TMSITable";
 		} 
 
 		//query subscriber registry for old imei, update if neccessary
 		string name = string("IMSI") + IMSI;
-		string old_imei = gSubscriberRegistry.imsiGet(name, "hardware");
+		char* old_imei = gSubscriberRegistry.sqlQuery("hardware", "sip_buddies", "name", name.c_str());
 		
 		//if we have a new imei and either there's no old one, or it is different...
-		if (!new_imei.empty() && (old_imei.empty() || old_imei != new_imei)){
+		if (new_imei && (!old_imei || strncmp(old_imei,new_imei, 15) != 0)){
+			ostringstream os2;
+			os2 << "update sip_buddies set RRLPSupported = \"1\", hardware = \"" << new_imei << "\" where name = \"IMSI" << IMSI << "\"";
 			LOG(INFO) << "Updating IMSI" << IMSI << " to IMEI:" << new_imei;
-			if (!gSubscriberRegistry.imsiSet(name,"RRLPSupported", "1")) {
-			 	LOG(INFO) << "SR RRLPSupported update problem";
-			}
-			if (!gSubscriberRegistry.imsiSet(name,"hardware", new_imei)) {
-				LOG(INFO) << "SR hardware update problem";
+			if (!gSubscriberRegistry.sqlUpdate(os2.str().c_str())) {
+				LOG(INFO) << "SR update problem";
 			}
 		}
+		if (old_imei)
+			free(old_imei);
 		delete msg;
 	}
 
